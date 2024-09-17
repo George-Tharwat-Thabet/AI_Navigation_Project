@@ -1,145 +1,137 @@
+print("Hello AI Navigation")
+
+import requests
 import torch
-import cv2
+from PIL import Image
 import numpy as np
 import pyttsx3
-import requests
-from typing import List, Tuple, Dict, Optional
 
-def load_yolov5_model() -> Optional[torch.nn.Module]:
-    try:
-        model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
-        return model
-    except Exception as e:
-        print(f"Error loading YOLOv5 model: {e}")
-        return None
+# Load the YOLOv5 model from ultralytics
+model = torch.hub.load('ultralytics/yolov5', 'yolov5s')
 
-def detect_objects(model: torch.nn.Module, image_path: str) -> Tuple[Optional[List[Dict]], int, int]:
-    try:
-        img = cv2.imread(image_path)
-        results = model(img)
-        img_height, img_width = img.shape[:2]
-        
-        detection_data = []
-        for *xyxy, conf, cls in results.xyxy[0]:
-            x1, y1, x2, y2 = map(int, xyxy)
-            label = results.names[int(cls)]
-            detection_data.append({
-                'label': label,
-                'confidence': float(conf),
-                'bbox': [x1, y1, x2, y2]
-            })
-        
-        return detection_data, img_width, img_height
-    except Exception as e:
-        print(f"Error detecting objects: {e}")
-        return None, 0, 0
+# Open an image file for object detection
+img_path = 'sample.jpg'
+img = Image.open(img_path)
 
-def get_navigation_info(bbox: List[int], img_width: int, img_height: int) -> Tuple[str, str]:
-    x1, y1, x2, y2 = bbox
-    center_x = (x1 + x2) / 2
+# Perform object detection on the image
+results = model(img)
+
+# Extract detection data (bounding box coordinates and object names)
+detection_data = results.pandas().xyxy[0] 
+
+# Get image dimensions for calculating object positions
+img_width, img_height = img.size
+
+# Function to determine where the object is located (left, center, or right) and estimate distance
+def get_navigation_info(row, img_width):
+    object_name = row['name']
+    xmin, xmax = row['xmin'], row['xmax']
+    center_x = (xmin + xmax) / 2
     
     if center_x < img_width / 3:
-        location = "left"
-    elif center_x < 2 * img_width / 3:
-        location = "center"
+        direction = "left"
+    elif center_x > 2 * img_width / 3:
+        direction = "right"
     else:
-        location = "right"
+        direction = "center"
     
-    object_height = y2 - y1
-    distance_ratio = object_height / img_height
-    
-    if distance_ratio > 0.5:
-        distance = "very close"
-    elif distance_ratio > 0.3:
-        distance = "close"
-    elif distance_ratio > 0.1:
-        distance = "moderate distance"
-    else:
-        distance = "far"
-    
-    return location, distance
+    ymin = row['ymin']
+    distance_estimation = 20 - (ymin / img_height) * 20
 
-def generate_surroundings_description(detection_data: List[Dict], img_width: int, img_height: int) -> str:
-    descriptions = []
-    for obj in detection_data:
-        label = obj['label']
-        location, distance = get_navigation_info(obj['bbox'], img_width, img_height)
-        descriptions.append(f"A {label} is {distance} to your {location}")
-    
-    return ". ".join(descriptions) + "."
+    return f"A {object_name} is on the {direction}, approximately {distance_estimation:.1f} meters away."
 
-def speak_surroundings_description(description: str) -> None:
-    engine = pyttsx3.init()
-    engine.say(description)
-    engine.runAndWait()
+# List to store navigation descriptions for each detected object
+navigation_info = []
+for _, row in detection_data.iterrows():
+    info = get_navigation_info(row, img_width)
+    navigation_info.append(info)
 
-def generate_response(surroundings_description: str, user_input: str) -> Optional[str]:
-    url = "https://us-south.ml.cloud.ibm.com/ml/v1-beta/generation/text?version=2023-05-29"
-    
-    prompt = f"""You are an AI assistant designed to help visually impaired individuals navigate their surroundings. 
-    Your task is to provide clear, concise, and helpful responses based on the following information:
+# Combine all the navigation info into one description
+surroundings_description = " ".join(navigation_info)
 
-    Surroundings description: {surroundings_description}
+# Print the description of the surroundings
+print(surroundings_description)
 
-    User's question: {user_input}
+# Initialize the pyttsx3 engine for TTS (Text-to-Speech)
+engine = pyttsx3.init()
 
-    Please provide a response that:
-    1. Directly addresses the user's question
-    2. Uses the surroundings description to give context-aware guidance
-    3. Prioritizes safety and clarity in your instructions
-    4. Avoids assumptions about the user's abilities or the environment beyond what's described
+# Use TTS to speak out the surroundings description
+engine.say(surroundings_description)
+engine.runAndWait()
 
-    Response:"""
+# Improved prompt engineering for the API request
+url = "https://us-south.ml.cloud.ibm.com/ml/v1/text/generation?version=2023-05-29"
+user_input = "How do I get to the nearest chair?"
 
-    body = {
-        "model_id": "google/flan-ul2",
-        "input": prompt,
-        "parameters": {
-            "decoding_method": "sample",
-            "max_new_tokens": 250,
-            "min_new_tokens": 50,
-            "random_seed": 111,
-            "stop_sequences": [],
-            "temperature": 0.7,
-            "top_k": 50,
-            "top_p": 1,
-            "repetition_penalty": 1
-        },
-        "project_id": "REPLACE_WITH_YOUR_PROJECT_ID"
-    }
+body = {
+    "input": f"""You are an AI assistant designed to help visually impaired individuals navigate their surroundings based on object detection data. Provide clear, concise, and helpful navigation instructions.
 
-    try:
-        accesstoken = "REPLACE_WITH_YOUR_ACCESS_TOKEN"
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {accesstoken}"
+Current surroundings:
+{surroundings_description}
+
+User question: {user_input}
+
+Instructions:
+1. Analyze the surroundings description.
+2. Identify the relevant objects for the user's question.
+3. Provide a clear and concise response with helpful navigation instructions.
+4. If the requested object is not present, suggest the closest alternative or advise the user accordingly.
+5. Use cardinal directions (front, back, left, right) and approximate distances for clarity.
+
+Response:""",
+    "parameters": {
+        "decoding_method": "greedy",
+        "max_new_tokens": 150,
+        "stop_sequences": ["\n\n"],
+        "repetition_penalty": 1.2
+    },
+    "model_id": "ibm/granite-13b-chat-v2",
+    "project_id": "8e0a89d4-f10e-49c9-9f1c-e11c4580adee",
+    "moderations": {
+        "hap": {
+            "input": {
+                "enabled": True,
+                "threshold": 0.5,
+                "mask": {
+                    "remove_entity_value": True
+                }
+            },
+            "output": {
+                "enabled": True,
+                "threshold": 0.5,
+                "mask": {
+                    "remove_entity_value": True
+                }
+            }
         }
+    }
+}
 
-        response = requests.post(url, headers=headers, json=body)
-        response.raise_for_status()
-        data = response.json()
-        return data['results'][0]['generated_text'].strip()
-    except Exception as e:
-        print(f"Error generating response: {e}")
-        return None
+# Access token (replace with a valid token)
+accesstoken = " "
 
-def main():
-    model = load_yolov5_model()
-    if model:
-        detection_data, img_width, img_height = detect_objects(model, 'sample.jpg')
-        if detection_data is not None:
-            surroundings_description = generate_surroundings_description(detection_data, img_width, img_height)
-            print(f"Surroundings description: {surroundings_description}")
-            speak_surroundings_description(surroundings_description)
-            
-            user_input = input("What would you like to know about your surroundings? ")
-            response = generate_response(surroundings_description, user_input)
-            if response:
-                print(f"AI Assistant: {response}")
-                speak_surroundings_description(response)
+# Prepare headers for the API request
+headers = {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "Authorization": "Bearer" + " " + accesstoken
+}
 
-if __name__ == "__main__":
-    main()
+# Make the API request
+response = requests.post(url, headers=headers, json=body)
 
-print("Code has been updated with improvements in modularity, error handling, and prompt engineering.")
+# Check for a successful response
+if response.status_code != 200:
+    raise Exception("Non-200 response: " + str(response.text))
+
+# Parse and print the response
+data = response.json()
+generated_text = data['results'][0]['generated_text'].strip()
+print("AI Assistant:", generated_text)
+
+# Use TTS to speak out the AI assistant's response
+engine.say(generated_text)
+engine.runAndWait()
+
+# Display the results (image with bounding boxes)
+results.show()
