@@ -1,26 +1,34 @@
-﻿print("Hello AI Navigation")
+print("Hello AI Navigation")
 
-import requests
-import torch
-from PIL import Image
-import numpy as np
+import requests  # Importing requests to handle HTTP requests
+import torch  # Importing torch for deep learning and tensor operations
+from PIL import Image  # Importing Image from PIL for image processing
+import numpy as np  # Importing numpy for numerical operations and array handling
+import pyttsx3  # Importing pyttsx3 for Text-to-Speech (TTS)
 
+# Load the YOLOv5 model from ultralytics
 model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # Small version of YOLOv5
 
+# Open an image file for object detection
 img_path = 'sample.jpg'
 img = Image.open(img_path)
 
+# Perform object detection on the image
 results = model(img)
 
+# Extract detection data (bounding box coordinates and object names)
 detection_data = results.pandas().xyxy[0] 
 
+# Get image dimensions for calculating object positions
 img_width, img_height = img.size
 
+# Function to determine where the object is located (left, center, or right) and estimate distance
 def get_navigation_info(row, img_width):
-    object_name = row['name']
+    object_name = row['name']  # Get the name of the detected object
     xmin, xmax = row['xmin'], row['xmax']
-    center_x = (xmin + xmax) / 2
+    center_x = (xmin + xmax) / 2  # Calculate the center position of the object
     
+    # Determine if the object is on the left, right, or center
     if center_x < img_width / 3:
         direction = "left"
     elif center_x > 2 * img_width / 3:
@@ -28,20 +36,32 @@ def get_navigation_info(row, img_width):
     else:
         direction = "center"
     
+    # Estimate the distance of the object based on its vertical position in the image
     ymin = row['ymin']
-    distance_estimation = 20 - (ymin / img_height) * 20 
+    distance_estimation = 20 - (ymin / img_height) * 20  # A simple estimation of distance in meters
 
     return f"A {object_name} is on the {direction}, approximately {distance_estimation:.1f} meters away."
 
+# List to store navigation descriptions for each detected object
 navigation_info = []
 for _, row in detection_data.iterrows():
-    info = get_navigation_info(row, img_width)
+    info = get_navigation_info(row, img_width)  # Get the navigation info for each detected object
     navigation_info.append(info)
 
+# Combine all the navigation info into one description
 surroundings_description = " ".join(navigation_info)
 
+# Print the description of the surroundings
 print(surroundings_description)
 
+# Initialize the pyttsx3 engine for TTS (Text-to-Speech)
+engine = pyttsx3.init()
+
+# Use TTS to speak out the surroundings description
+engine.say(surroundings_description)
+engine.runAndWait()
+
+# Code to send the surroundings description and user input to an external API for text generation
 url = "https://us-south.ml.cloud.ibm.com/ml/v1/text/generation?version=2023-05-29"
 user_input = "How do I get to the nearest chair?"
 
@@ -180,21 +200,26 @@ Output:""",
 	}
 }
 
+# Access token (replace with a valid token)
 accesstoken = " "
 
+# Prepare headers for the API request
 headers = {
     "Accept": "application/json",
     "Content-Type": "application/json",
-    "Authorization": "Bearer"+" "+accesstoken
+    "Authorization": "Bearer" + " " + accesstoken
 }
 
+# Make the API request
 response = requests.post(url, headers=headers, json=body)
 
+# Check for a successful response
 if response.status_code != 200:
     raise Exception("Non-200 response: " + str(response.text))
 
+# Parse and print the response
 data = response.json()
-
 print(data)
 
+# Display the results (image with bounding boxes)
 results.show()
