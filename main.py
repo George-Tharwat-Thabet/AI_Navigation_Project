@@ -65,7 +65,7 @@ print(surroundings_description)
 url = "https://us-south.ml.cloud.ibm.com/ml/v1/text/generation?version=2023-05-29"
 
 # Speech-to-text for user input (real-time command processing)
-user_input = recognize_speech()
+user_input = "How the surroundings"
 print(user_input)
 
 body = {
@@ -152,7 +152,6 @@ A couch is on the right, approximately 4.3 meters away.
 How do I get to the nearest chair?
 Output: \"I'\''m sorry, there is no chair in the current surroundings, but there is a couch to your right, which is the closest seating option.\"
 
-
 Input: A TV is in the center, approximately 11.9 meters away.
 A couch is on the left, approximately 8.9 meters away.
 A bed is on the right, approximately 6.7 meters away.
@@ -173,7 +172,7 @@ How do I get to the  bed?
 Output: I don’t have information about a bed in the current surroundings. You might need to ask someone nearby or move to a different area.
 
 Input: {surroundings_description}
-What do you want to know about? {user_input}
+{user_input}
 Output:""",
 	"parameters": {
 		"decoding_method": "greedy",
@@ -203,7 +202,7 @@ Output:""",
 	}
 }
 
-accesstoken = " "
+accesstoken = ""
 
 headers = {
     "Accept": "application/json",
