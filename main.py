@@ -27,7 +27,7 @@ def recognize_speech():
 
 model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # Small version of YOLOv5
 
-img_path = 'sample.jpg'
+img_path = 'sample2.jpg'
 img = Image.open(img_path)
 
 results = model(img)
@@ -53,7 +53,27 @@ def get_navigation_info(row, img_width):
 
     return f"A {object_name} is on the {direction}, approximately {distance_estimation:.1f} meters away."
 
+# Function to calculate navigation info for text
+def get_text_navigation_info(result, img_width):
+    bbox, text, confidence = result
+    xmin, ymin = bbox[0]
+    xmax, ymax = bbox[2]
+    center_x = (xmin + xmax) / 2
+    
+    if center_x < img_width / 3:
+        direction = "left"
+    elif center_x > 2 * img_width / 3:
+        direction = "right"
+    else:
+        direction = "center"
+    
+    # Estimating distance (using top of the bounding box)
+    distance_estimation = 20 - (ymin / img_height) * 20
+    
+    return f"Text '{text}' is on the {direction}, approximately {distance_estimation:.1f} meters away."
+
 navigation_info = []
+
 for _, row in detection_data.iterrows():
     info = get_navigation_info(row, img_width)
     navigation_info.append(info)
@@ -65,7 +85,7 @@ print(surroundings_description)
 url = "https://us-south.ml.cloud.ibm.com/ml/v1/text/generation?version=2023-05-29"
 
 # Speech-to-text for user input (real-time command processing)
-user_input = "How the surroundings"
+user_input = "where is the son"
 print(user_input)
 
 body = {
@@ -87,6 +107,30 @@ A laptop is on the right, approximately 8.4 meters away.
 A book is on the right, approximately 8.5 meters away.
 How do I get to the nearest chair?
 Output: \"There are several chairs around you. To your right, you can find a chair in the center and others further away. There is also a chair on your left side.\"
+
+Input: A table is in the center, approximately 10 meters away.
+A chair is on the right, approximately 5 meters away.
+How do I sit down at the table?
+Output: \"Walk towards the table in the center, and you will find a chair on your right side that you can sit on.\"
+
+Input: A TV is in the center, approximately 15 meters away.
+A couch is on the left, approximately 10 meters away.
+Where is the remote control?
+Output: \"I don't have information about a remote control. You may want to check the area around the couch or ask someone nearby.\"
+
+Input: A laptop is on the left, approximately 17.6 meters away.
+A chair is in the center, approximately 18.5 meters away.
+A book is on the right, approximately 9.4 meters away.
+A bottle is on the right, approximately 17.6 meters away.
+A chair is on the right, approximately 19.2 meters away.
+A chair is on the left, approximately 20.0 meters away.
+A chair is on the right, approximately 19.7 meters away.
+A chair is on the right, approximately 19.8 meters away.
+A chair is on the right, approximately 17.4 meters away.
+A laptop is on the right, approximately 8.4 meters away.
+A book is on the right, approximately 8.5 meters away.
+Where is the nearest exit?
+Output: \"I don't have information about the exit in this area. You might need to ask someone nearby or explore cautiously.\"
 
 Input: \"A laptop is on the left, approximately 17.6 meters away.
 A chair is in the center, approximately 18.5 meters away.
@@ -114,7 +158,7 @@ A chair is on the right, approximately 17.4 meters away.
 A laptop is on the right, approximately 8.4 meters away.
 A book is on the right, approximately 8.5 meters away.
 Where is the nearest restroom?\"
-Output: I don’t have information about a restroom in the current surroundings. You might need to ask someone nearby or move to a different area.
+Output: \"I don't have information about a restroom in the current surroundings. You might need to ask someone nearby or move to a different area.\"
 
 Input: \"A laptop is on the left, approximately 17.6 meters away.
 A chair is in the center, approximately 18.5 meters away.
@@ -142,7 +186,7 @@ A chair is on the right, approximately 17.4 meters away.
 A laptop is on the right, approximately 8.4 meters away.
 A book is on the right, approximately 8.5 meters away.
 What’s the arrangement of the objects around me?
-Output: You have several items to your right, including books and chairs. On the left, there are some chairs and a laptop. The arrangement is spread out, with objects positioned at different relative distances.\"
+Output:\" You have several items to your right, including books and chairs. On the left, there are some chairs and a laptop. The arrangement is spread out, with objects positioned at different relative distances.\"
 
 Input: A TV is in the center, approximately 11.9 meters away.
 A couch is on the left, approximately 8.9 meters away.
@@ -158,7 +202,27 @@ A bed is on the right, approximately 6.7 meters away.
 A bed is on the right, approximately 4.6 meters away.
 A couch is on the right, approximately 4.3 meters away.
 How do I get to the nearest tv?
-Output: The TV is in the center. You can simply walk towards it to view it.
+Output:\"The TV is in the center. You can simply walk towards it to view it.\"
+
+Input: A laptop is on the left.
+A chair is in the center.
+A book is on the right.
+A bottle is on the right.
+How do I get to the nearest chair?
+Output: \"There are several chairs around you. The closest one is to your right.\"
+
+Input: A laptop is on the left.
+A chair is in the center.
+A book is on the right.
+A bottle is on the right.
+Where is the nearest book?
+Output: \"There are books on both sides. One is on your right side, relatively close to you.\"
+
+Input: A TV is in the center.
+A couch is on the left.
+A bed is on the right.
+How do I get to the nearest couch?
+Output:\" The couch is to your left, just turn and walk toward it.\"
 
 Input: A elephant is on the center, approximately 13.3 meters away.
 A bird is on the center, approximately 15.9 meters away.
@@ -169,7 +233,7 @@ A giraffe is on the center, approximately 13.1 meters away.
 A sheep is on the center, approximately 7.0 meters away.
 A zebra is on the right, approximately 8.5 meters away.
 How do I get to the  bed?
-Output: I don’t have information about a bed in the current surroundings. You might need to ask someone nearby or move to a different area.
+Output: \"I don’t have information about a bed in the current surroundings. You might need to ask someone nearby or move to a different area.\"
 
 Input: {surroundings_description}
 {user_input}
@@ -178,7 +242,7 @@ Output:""",
 		"decoding_method": "greedy",
 		"max_new_tokens": 300,
 		"stop_sequences": ["\n\n"],
-		"repetition_penalty": 1
+		"repetition_penalty": 1.2
 	},
 	"model_id": "ibm/granite-13b-chat-v2",
 	"project_id": "8e0a89d4-f10e-49c9-9f1c-e11c4580adee",
